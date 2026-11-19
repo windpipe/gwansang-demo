@@ -1,0 +1,119 @@
+{
+ "backbone": "efficientnet_b0.ra_in1k",
+ "input_hw": [
+  320,
+  256
+ ],
+ "mean": [
+  0.485,
+  0.456,
+  0.406
+ ],
+ "std": [
+  0.229,
+  0.224,
+  0.225
+ ],
+ "fields": {
+  "face_shape": [
+   "diamond",
+   "inverted_triangle",
+   "long",
+   "oval",
+   "round",
+   "square"
+  ],
+  "chin": [
+   "double",
+   "protruding",
+   "round",
+   "square",
+   "v_shape"
+  ],
+  "forehead": [
+   "medium",
+   "narrow",
+   "wide"
+  ],
+  "eyebrow_density": [
+   "dark",
+   "light"
+  ],
+  "eyebrow_thickness": [
+   "medium",
+   "thick",
+   "thin"
+  ],
+  "eyebrow_length": [
+   "long",
+   "medium",
+   "short"
+  ],
+  "eyebrow_shape": [
+   "angled",
+   "rounded",
+   "straight",
+   "wavy"
+  ],
+  "brow_gap": [
+   "medium",
+   "narrow",
+   "wide"
+  ],
+  "eye_size": [
+   "large",
+   "medium",
+   "small"
+  ],
+  "eyelid": [
+   "double",
+   "inner_double",
+   "single"
+  ],
+  "eye_tail": [
+   "down",
+   "level",
+   "up"
+  ],
+  "eye_distance": [
+   "medium",
+   "narrow",
+   "wide"
+  ],
+  "nose_bridge": [
+   "high",
+   "low",
+   "medium"
+  ],
+  "nose_size": [
+   "large",
+   "medium",
+   "small"
+  ],
+  "nose_wings": [
+   "medium",
+   "narrow",
+   "wide"
+  ],
+  "lip_thickness": [
+   "medium",
+   "thick",
+   "thin"
+  ],
+  "mouth_size": [
+   "large",
+   "medium",
+   "small"
+  ],
+  "mouth_corners": [
+   "down",
+   "level",
+   "up"
+  ],
+  "nasolabial_folds": [
+   "many",
+   "none",
+   "some"
+  ]
+ }
+}

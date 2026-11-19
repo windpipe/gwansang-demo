@@ -1,0 +1,178 @@
+{
+ "face_shape": {
+  "name": "얼굴형",
+  "values": {
+   "oval": "계란형",
+   "round": "둥근형",
+   "long": "긴형",
+   "square": "사각형",
+   "inverted_triangle": "역삼각형",
+   "diamond": "마름모형"
+  },
+  "test_balanced_acc": 0.34
+ },
+ "chin": {
+  "name": "턱",
+  "values": {
+   "round": "둥근형",
+   "v_shape": "V자형",
+   "square": "각진형(사각)",
+   "protruding": "주걱형",
+   "double": "이중형"
+  },
+  "test_balanced_acc": 0.35
+ },
+ "forehead": {
+  "name": "이마",
+  "values": {
+   "medium": "보통",
+   "wide": "넓다",
+   "narrow": "좁다"
+  },
+  "test_balanced_acc": 0.48
+ },
+ "eyebrow_density": {
+  "name": "눈썹 짙음",
+  "values": {
+   "dark": "진하다",
+   "light": "흐리다"
+  },
+  "test_balanced_acc": 0.86
+ },
+ "eyebrow_thickness": {
+  "name": "눈썹 두께",
+  "values": {
+   "medium": "보통",
+   "thick": "두껍다",
+   "thin": "얇다"
+  },
+  "test_balanced_acc": 0.61
+ },
+ "eyebrow_length": {
+  "name": "눈썹 길이",
+  "values": {
+   "medium": "보통",
+   "long": "길다",
+   "short": "짧다"
+  },
+  "test_balanced_acc": 0.57
+ },
+ "eyebrow_shape": {
+  "name": "눈썹 모양",
+  "values": {
+   "straight": "직선형",
+   "angled": "각진형",
+   "rounded": "둥근형",
+   "wavy": "물결형"
+  },
+  "test_balanced_acc": 0.37
+ },
+ "brow_gap": {
+  "name": "미간",
+  "values": {
+   "medium": "보통",
+   "wide": "넓다",
+   "narrow": "좁다"
+  },
+  "test_balanced_acc": 0.56
+ },
+ "eye_size": {
+  "name": "눈 크기",
+  "values": {
+   "medium": "보통",
+   "small": "작다",
+   "large": "크다"
+  },
+  "test_balanced_acc": 0.66
+ },
+ "eyelid": {
+  "name": "쌍꺼풀",
+  "values": {
+   "single": "외꺼풀",
+   "double": "쌍커풀",
+   "inner_double": "속쌍꺼풀"
+  },
+  "test_balanced_acc": 0.58
+ },
+ "eye_tail": {
+  "name": "눈꼬리",
+  "values": {
+   "level": "보통",
+   "up": "올라감",
+   "down": "내려감"
+  },
+  "test_balanced_acc": 0.56
+ },
+ "eye_distance": {
+  "name": "눈 사이 거리",
+  "values": {
+   "medium": "보통",
+   "wide": "넓다",
+   "narrow": "좁다"
+  },
+  "test_balanced_acc": 0.54
+ },
+ "nose_bridge": {
+  "name": "콧대",
+  "values": {
+   "medium": "보통",
+   "high": "높다",
+   "low": "낮다"
+  },
+  "test_balanced_acc": 0.47
+ },
+ "nose_size": {
+  "name": "코 크기",
+  "values": {
+   "medium": "보통",
+   "large": "크다",
+   "small": "작다"
+  },
+  "test_balanced_acc": 0.41
+ },
+ "nose_wings": {
+  "name": "콧볼",
+  "values": {
+   "medium": "보통",
+   "wide": "넓다",
+   "narrow": "좁다"
+  },
+  "test_balanced_acc": 0.58
+ },
+ "lip_thickness": {
+  "name": "입술 두께",
+  "values": {
+   "medium": "보통",
+   "thick": "두껍다",
+   "thin": "얇다"
+  },
+  "test_balanced_acc": 0.65
+ },
+ "mouth_size": {
+  "name": "입 크기",
+  "values": {
+   "medium": "보통",
+   "small": "작다",
+   "large": "크다"
+  },
+  "test_balanced_acc": 0.6
+ },
+ "mouth_corners": {
+  "name": "입꼬리",
+  "values": {
+   "level": "보통",
+   "up": "올라감",
+   "down": "처짐"
+  },
+  "test_balanced_acc": 0.7
+ },
+ "nasolabial_folds": {
+  "name": "팔자주름",
+  "values": {
+   "none": "없다",
+   "some": "보통",
+   "many": "많다"
+  },
+  "test_balanced_acc": 0.63
+ }
+}

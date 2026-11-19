@@ -1,0 +1,137 @@
+{
+ "eye_distance": {
+  "metric": "eye_gap_ratio",
+  "order": [
+   "narrow",
+   "medium",
+   "wide"
+  ],
+  "cuts": [
+   1.4167781267431658,
+   1.4259572468605548
+  ],
+  "test_balanced": 0.43846801346801345,
+  "chance": 0.3333333333333333,
+  "auc_train": 0.7817542369752243
+ },
+ "nose_size": {
+  "metric": "nose_area",
+  "order": [
+   "small",
+   "medium",
+   "large"
+  ],
+  "cuts": [
+   0.7932613690419632,
+   0.8155627790715015
+  ],
+  "test_balanced": 0.36422648868957946,
+  "chance": 0.3333333333333333,
+  "auc_train": 0.747732306210881
+ },
+ "nose_wings": {
+  "metric": "nose_width",
+  "order": [
+   "narrow",
+   "medium",
+   "wide"
+  ],
+  "cuts": [
+   0.2505510588266688,
+   0.25749943779710976
+  ],
+  "test_balanced": 0.3734301779025789,
+  "chance": 0.3333333333333333,
+  "auc_train": 0.6277121453751888
+ },
+ "mouth_size": {
+  "metric": "mouth_width",
+  "order": [
+   "small",
+   "medium",
+   "large"
+  ],
+  "cuts": [
+   0.34062146054482584,
+   0.35235943485365173
+  ],
+  "test_balanced": 0.5994051168469773,
+  "chance": 0.3333333333333333,
+  "auc_train": 0.867944704118529
+ },
+ "eye_size": {
+  "metric": "eye_area",
+  "order": [
+   "small",
+   "medium",
+   "large"
+  ],
+  "cuts": [
+   1.02151633449484,
+   1.0968665050721762
+  ],
+  "test_balanced": 0.49650186904752625,
+  "chance": 0.3333333333333333,
+  "auc_train": 0.8199735140609177
+ },
+ "eye_tail": {
+  "metric": "eye_tilt_deg",
+  "order": [
+   "down",
+   "level",
+   "up"
+  ],
+  "cuts": [
+   5.371440652307341,
+   7.135471581983985
+  ],
+  "test_balanced": 0.5173832758578522,
+  "chance": 0.3333333333333333,
+  "auc_train": 0.8738948493251122
+ },
+ "mouth_corners": {
+  "metric": "mouth_corner_lift",
+  "order": [
+   "down",
+   "level",
+   "up"
+  ],
+  "cuts": [
+   -0.015250810142746367,
+   0.02149334591863185
+  ],
+  "test_balanced": 0.6705291005291004,
+  "chance": 0.3333333333333333,
+  "auc_train": 0.9530483429257648
+ },
+ "lip_thickness": {
+  "metric": "lip_thickness",
+  "order": [
+   "thin",
+   "medium",
+   "thick"
+  ],
+  "cuts": [
+   0.09657260141316565,
+   0.10543904736238625
+  ],
+  "test_balanced": 0.6518199233716475,
+  "chance": 0.3333333333333333,
+  "auc_train": 0.9128354287858885
+ },
+ "brow_gap": {
+  "metric": "brow_gap2",
+  "order": [
+   "narrow",
+   "medium",
+   "wide"
+  ],
+  "cuts": [
+   0.7679215474297111,
+   0.8123550995917268
+  ],
+  "test_balanced": 0.31142857142857144,
+  "chance": 0.3333333333333333,
+  "auc_train": 0.4580152671755725
+ }
+}
