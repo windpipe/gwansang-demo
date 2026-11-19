@@ -39,6 +39,7 @@
   table { width: 100%; border-collapse: collapse; font-size: 14px; margin-top: 10px; }
   td { padding: 5px 4px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   td.name { color: var(--sub); width: 28%; }
+  td.sec { font-weight: 700; padding-top: 14px; border-bottom: 2px solid var(--line); }
   td.val { font-weight: 600; width: 22%; }
   .bar { height: 6px; background: var(--bar); border-radius: 3px; overflow: hidden; }
   .bar > i { display: block; height: 100%; background: var(--accent); }
@@ -78,6 +79,7 @@
       <button id="start" class="primary">카메라 켜기</button>
       <select id="cams" hidden></select>
       <button id="analyze" disabled>분석하기</button>
+      <button id="expr" disabled title="5초 동안 평소 표정·시선을 잽니다">표정·시선 5초 측정</button>
       <label class="btn">사진 파일로 분석<input id="file" type="file" accept="image/*" hidden></label>
     </div>
     <div id="status">모델을 불러오는 중…</div>
@@ -163,7 +165,7 @@ async function fetchWithProgress(url, st) {
   return buf;
 }
 
-let meta, labels, cuts, session, landmarker, segmenter, EP = "wasm";
+let meta, labels, cuts, extra, session, landmarker, segmenter, EP = "wasm";
 let lastTs = 0, live = null, streaming = false, busy = false, lastLive = 0;
 
 async function mpCreate(Cls, fs, buf, opts) {
@@ -179,7 +181,7 @@ async function load() {
   const step = stepList();
   status("모델을 불러오는 중… (처음 한 번만 약 36MB, 이후에는 캐시 사용)");
   let s = step("설정 파일");
-  [meta, labels, cuts] = await Promise.all(["face_cls_meta.json", "labels_ko.json", "geometry_cuts.json"]
+  [meta, labels, cuts, extra] = await Promise.all(["face_cls_meta.json", "labels_ko.json", "geometry_cuts.json", "geometry_extra.json"]
     .map((f) => fetch(MODEL + f).then((r) => r.json())));
   s.done();
 
@@ -195,7 +197,7 @@ async function load() {
   s = step("얼굴 랜드마크 모델");
   const fs = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.2.2/wasm");
   const lmBuf = await fetchWithProgress(LANDMARK_URL, s);
-  let lmDev; [landmarker, lmDev] = await mpCreate(FaceLandmarker, fs, lmBuf, { runningMode: "VIDEO", numFaces: 2 });
+  let lmDev; [landmarker, lmDev] = await mpCreate(FaceLandmarker, fs, lmBuf, { runningMode: "VIDEO", numFaces: 2, outputFaceBlendshapes: true });
   s.done(`${(lmBuf.length / 1e6).toFixed(1)}MB · ${lmDev}`);
 
   s = step("배경 분리 모델");
@@ -277,8 +279,131 @@ function whiteBackground(src, w, h) {
   }
   ctx.putImageData(img, 0, 0);
   seg.close();
-  return c;
+  return { canvas: c, mask, mw, mh };
 }
+
+// ---------- 추가 측정: 삼정·좌우 대칭·턱선 (tools/vision/face_extra_geometry.py 와 같은 계산) ----------
+const PAIRS = [[33, 263], [133, 362], [159, 386], [145, 374], [70, 300], [105, 334], [107, 336], [55, 285],
+  [61, 291], [40, 270], [91, 321], [64, 294], [98, 327], [234, 454], [93, 323], [132, 361],
+  [58, 288], [172, 397], [136, 365], [116, 345], [50, 280], [123, 352]];
+const MIDLINE = [10, 151, 9, 8, 168, 6, 197, 195, 5, 4, 1, 2, 164, 0, 17, 18, 200, 199, 175, 152];
+
+function extraGeometry(lm, w, h, mask, mw, mh) {
+  const Pp = lm.map((p) => [p.x * w, p.y * h]);
+  const r = mid(Pp[33], Pp[133]), l = mid(Pp[362], Pp[263]);
+  const a = -Math.atan2(l[1] - r[1], l[0] - r[0]), ca = Math.cos(a), sa = Math.sin(a);
+  const rot = (x, y) => [(x - r[0]) * ca - (y - r[1]) * sa, (x - r[0]) * sa + (y - r[1]) * ca];
+  const Q = Pp.map(([x, y]) => rot(x, y));
+  const fw = dist(Pp[234], Pp[454]);
+  const out = {};
+  const xm = MIDLINE.reduce((s, i) => s + Q[i][0], 0) / MIDLINE.length;
+  out.asymmetry = PAIRS.reduce((s, [p, q]) => s + Math.hypot(Q[p][0] - (2 * xm - Q[q][0]), Q[p][1] - Q[q][1]), 0) / PAIRS.length / fw;
+  out.jaw_ratio = dist(Pp[172], Pp[397]) / fw;
+  const v1 = [Pp[172][0] - Pp[152][0], Pp[172][1] - Pp[152][1]], v2 = [Pp[397][0] - Pp[152][0], Pp[397][1] - Pp[152][1]];
+  out.chin_angle = Math.acos(Math.max(-1, Math.min(1, (v1[0] * v2[0] + v1[1] * v2[1]) / (Math.hypot(...v1) * Math.hypot(...v2))))) * 180 / Math.PI;
+  // 삼정: 미간(9)에서 이마 중앙(10) 방향으로 올라가며 머리카락 경계를 찾는다
+  const [x0, y0] = Pp[9], [x1, y1] = Pp[10];
+  const n = Math.hypot(x1 - x0, y1 - y0) || 1, ux = (x1 - x0) / n, uy = (y1 - y0) / n;
+  let run = 0, hl = null; out.hairline = "not_found";
+  for (let st = 0; st < Math.max(w, h); st++) {
+    const x = x0 + ux * st, y = y0 + uy * st;
+    if (x < 0 || y < 0 || x >= w || y >= h) { out.hairline = "frame_edge"; break; }
+    const c = mask[Math.min(mh - 1, Math.floor(y * mh / h)) * mw + Math.min(mw - 1, Math.floor(x * mw / w))];
+    if (c === 1) { if (++run >= 3) { hl = [x - ux * 2, y - uy * 2]; out.hairline = "hair"; break; } }
+    else if (c !== 2 && c !== 3) { hl = [x, y]; out.hairline = "no_hair"; break; }
+    else run = 0;
+  }
+  if (hl) {
+    const ys = [rot(...hl)[1], Q[9][1], Q[2][1], Q[152][1]];
+    const parts = [ys[1] - ys[0], ys[2] - ys[1], ys[3] - ys[2]];
+    if (Math.min(...parts) > 0) { const s = parts[0] + parts[1] + parts[2]; out.thirds = parts.map((p) => p / s); }
+  }
+  return out;
+}
+
+// 몽타주 2,000명 분포의 하위·상위 1/3 경계로 판정
+const pct = (k, v, low, mid, high) => v < extra[k].p33 ? low : v > extra[k].p67 ? high : mid;
+function judgeExtra(g) {
+  const res = {};
+  res.symmetry = { value: pct("asymmetry", g.asymmetry, "좌우 대칭이 좋은 편", "보통", "좌우 차이가 있는 편"), raw: +g.asymmetry.toFixed(4) };
+  res.jawline = { value: pct("chin_angle", g.chin_angle, "갸름한 턱선", "보통", "넓고 각진 턱선"),
+                  raw: { chin_angle: +g.chin_angle.toFixed(1), jaw_ratio: +g.jaw_ratio.toFixed(3) } };
+  if (g.thirds) {
+    const names = ["상정(이마)", "중정(눈썹~코)", "하정(코밑~턱)"], keys = ["upper", "middle", "lower"];
+    // 몽타주 평균 대비 가장 길게 나온 부분
+    const rel = g.thirds.map((v, i) => v / extra[keys[i]].mean);
+    const iMax = rel.indexOf(Math.max(...rel));
+    const spread = Math.max(...rel) - Math.min(...rel);
+    res.thirds = { value: spread < 0.12 ? "세 부분이 고르게 균형 잡힌 편" : `${names[iMax]}이 긴 편`,
+                   raw: g.thirds.map((v) => +v.toFixed(3)) };
+    if (g.thirds[0] < 0.2) res.thirds.note = "앞머리가 이마를 가리면 상정이 짧게 잡힙니다";
+  } else {
+    res.thirds = { value: "측정 못 함", note: g.hairline === "frame_edge" ? "머리 윗부분이 화면 밖에 있습니다" : "이마 위 머리카락 경계를 찾지 못했습니다" };
+  }
+  return res;
+}
+
+// ---------- 표정·시선 (영상 몇 초 동안의 평균) ----------
+const EXPR_SECONDS = 5;
+let exprSamples = null;
+function collectExpression(res, w) {
+  if (!exprSamples || !res.faceLandmarks || res.faceLandmarks.length !== 1 || !res.faceBlendshapes || !res.faceBlendshapes[0]) return;
+  const b = Object.fromEntries(res.faceBlendshapes[0].categories.map((c) => [c.categoryName, c.score]));
+  const lm = res.faceLandmarks[0];
+  // 홍채 중심(468·473)이 눈 안쪽~바깥 꼬리 사이 어디쯤인지 (0~1)
+  const gx = (iris, inner, outer) => (lm[iris].x - lm[inner].x) / ((lm[outer].x - lm[inner].x) || 1e-6);
+  exprSamples.push({
+    t: performance.now(),
+    smile: ((b.mouthSmileLeft || 0) + (b.mouthSmileRight || 0)) / 2,
+    frown: ((b.browDownLeft || 0) + (b.browDownRight || 0)) / 2,
+    blink: ((b.eyeBlinkLeft || 0) + (b.eyeBlinkRight || 0)) / 2,
+    wide: ((b.eyeWideLeft || 0) + (b.eyeWideRight || 0)) / 2,
+    gaze: lm.length > 473 ? (gx(468, 133, 33) + gx(473, 362, 263)) / 2 : null,
+  });
+}
+
+function summarizeExpression(S) {
+  const mean = (k) => S.reduce((s, x) => s + x[k], 0) / S.length;
+  const open = S.filter((x) => x.blink < 0.5);
+  let blinks = 0; for (let i = 1; i < S.length; i++) if (S[i].blink >= 0.5 && S[i - 1].blink < 0.5) blinks++;
+  const secs = (S[S.length - 1].t - S[0].t) / 1000 || 1;
+  const g = open.map((x) => x.gaze).filter((v) => v !== null);
+  const gm = g.reduce((s, v) => s + v, 0) / (g.length || 1);
+  const gstd = Math.sqrt(g.reduce((s, v) => s + (v - gm) ** 2, 0) / (g.length || 1));
+  const smile = mean("smile"), frown = mean("frown");
+  const eyeOpen = 1 - (open.length ? open.reduce((s, x) => s + x.blink, 0) / open.length : 0);
+  return {
+    samples: S.length, seconds: +secs.toFixed(1),
+    smile: { value: smile > 0.3 ? "미소가 많은 편" : smile < 0.08 ? "무표정에 가까운 편" : "살짝 미소", raw: +smile.toFixed(3) },
+    brow: { value: frown > 0.3 ? "미간에 힘이 들어가는 편" : "미간이 편안한 편", raw: +frown.toFixed(3) },
+    eyes: { value: eyeOpen > 0.75 ? "눈을 또렷하게 뜨는 편" : "눈을 가늘게 뜨는 편", raw: +eyeOpen.toFixed(3) },
+    gaze: { value: gstd > 0.06 ? "시선이 자주 움직이는 편" : "시선이 안정적인 편", raw: +gstd.toFixed(3) },
+    blinks_per_min: Math.round(blinks / secs * 60),
+  };
+}
+
+async function measureExpression() {
+  if (!streaming || busy || exprSamples) return;
+  const btn = $("expr"); btn.disabled = true;
+  exprSamples = [];
+  const step = stepList();
+  const s = step(`표정·시선 측정 (${EXPR_SECONDS}초, 카메라를 편하게 바라봐 주세요)`);
+  const t0 = performance.now();
+  while (performance.now() - t0 < EXPR_SECONDS * 1000) {
+    s.note(`${Math.ceil(EXPR_SECONDS - (performance.now() - t0) / 1000)}초 · 표본 ${exprSamples.length}개`);
+    progress((performance.now() - t0) / (EXPR_SECONDS * 1000));
+    await new Promise((r) => setTimeout(r, 200));
+  }
+  progress(null);
+  const S = exprSamples; exprSamples = null; btn.disabled = false;
+  if (S.length < 10) { s.fail("얼굴이 충분히 잡히지 않았습니다"); status("표정·시선 측정 실패: 얼굴을 화면 가운데에 두고 다시 해 주세요.", "warn"); return; }
+  s.done(`표본 ${S.length}개`);
+  const ex = summarizeExpression(S);
+  lastExpression = ex;
+  if (window.__lastFace) { window.__lastFace.expression = ex; render(window.__lastFace); } else renderExpressionOnly(ex);
+  status("표정·시선 측정 완료", "ok");
+}
+let lastExpression = null;
 
 function alignToCanon(src, lm, w, h) {
   const e = eyes(lm, w, h);
@@ -330,7 +455,9 @@ async function analyze(src, w, h, res, step) {
   let white;
   try { white = whiteBackground(src, w, h); s.done(); } catch (e) { s.fail(e); throw e; }
   s = step("눈 위치 정렬"); await nextFrame();
-  const canon = alignToCanon(white, lm, w, h); const tensor = toTensor(canon); s.done();
+  const canon = alignToCanon(white.canvas, lm, w, h); const tensor = toTensor(canon); s.done();
+  s = step("비율·대칭·턱선 측정");
+  const ext = extraGeometry(lm, w, h, white.mask, white.mw, white.mh); s.done();
   s = step(`특징 분류 (${EP === "webgpu" ? "GPU" : "CPU"})`); await nextFrame();
   let out;
   try { out = await session.run({ image: tensor }); s.done(); } catch (e) { s.fail(e); throw e; }
@@ -348,6 +475,8 @@ async function analyze(src, w, h, res, step) {
     face.features[k] = { value, by, ...(conf !== null ? { conf: +conf.toFixed(3) } : {}),
       ...(labels[k].test_balanced_acc < WEAK ? { low_confidence: true } : {}) };
   }
+  face.proportions = judgeExtra(ext);
+  if (lastExpression) face.expression = lastExpression;
   face.elapsed_ms = Math.round(performance.now() - t0);
   render(face);
   status(qa.ok ? `분석 완료 (${face.elapsed_ms}ms)` : `분석했지만 촬영 조건이 좋지 않습니다: ${qa.msg}`, qa.ok ? "ok" : "warn");
@@ -355,14 +484,42 @@ async function analyze(src, w, h, res, step) {
   return face;
 }
 
+// 부위 순서: 얼굴 전체 → 이마 → 눈썹 → 눈 → 코 → 광대·볼 → 입 → 턱
+const ORDER = ["face_shape", "forehead", "forehead_shape", "eyebrow_density", "eyebrow_thickness", "eyebrow_length",
+  "eyebrow_shape", "brow_gap", "eye_size", "eyelid", "eye_tail", "eye_distance", "nose_bridge", "nose_size", "nose_wings",
+  "cheeks", "lip_thickness", "mouth_size", "mouth_corners", "nasolabial_folds", "chin", "chin_length"];
+
+const sectionRow = (title) => `<tr><td colspan="3" class="sec">${title}</td></tr>`;
+const textRow = (name, value, tag, note) =>
+  `<tr><td class="name">${name}</td><td class="val">${value}</td><td><span class="tag">${tag}</span>${note ? `<br><span class="weak">${note}</span>` : ""}</td></tr>`;
+
+function expressionRows(ex) {
+  return [sectionRow(`표정·시선 <span class="tag">(${ex.seconds}초, 실험 기능)</span>`),
+    textRow("평소 표정", ex.smile.value, `미소 ${ex.smile.raw}`),
+    textRow("미간", ex.brow.value, `찌푸림 ${ex.brow.raw}`),
+    textRow("눈빛", ex.eyes.value, `뜬 정도 ${ex.eyes.raw}`),
+    textRow("시선", ex.gaze.value, `흔들림 ${ex.gaze.raw} · 깜빡임 ${ex.blinks_per_min}회/분`)];
+}
+
+function renderExpressionOnly(ex) { $("result").innerHTML = `<tbody>${expressionRows(ex).join("")}</tbody>`; }
+
 function render(face) {
-  const rows = Object.entries(face.features).map(([k, f]) => {
-    const L = labels[k], ko = L.values[f.value] || f.value;
+  const keys = ORDER.filter((k) => face.features[k]).concat(Object.keys(face.features).filter((k) => !ORDER.includes(k)));
+  const rows = [sectionRow("부위별 특징")].concat(keys.map((k) => {
+    const f = face.features[k], L = labels[k] || { name: k, values: {} }, ko = L.values[f.value] || f.value;
     const bar = f.conf != null ? `<div class="bar"><i style="width:${Math.round(f.conf * 100)}%"></i></div>`
                                : `<span class="tag">얼굴 비율 측정</span>`;
     const weak = f.low_confidence ? ` <span class="weak">주의</span>` : "";
     return `<tr><td class="name">${L.name}${weak}</td><td class="val">${ko}</td><td>${bar}</td></tr>`;
-  });
+  }));
+  if (face.proportions) {
+    const p = face.proportions;
+    rows.push(sectionRow("전체 비율·조화 <span class=\"tag\">(측정)</span>"));
+    rows.push(textRow("삼정 비율", p.thirds.value, p.thirds.raw ? p.thirds.raw.map((v) => Math.round(v * 100)).join(" : ") : "", p.thirds.note));
+    rows.push(textRow("좌우 대칭", p.symmetry.value, `어긋남 ${p.symmetry.raw}`));
+    rows.push(textRow("턱선", p.jawline.value, `턱 각도 ${p.jawline.raw.chin_angle}°`));
+  }
+  if (face.expression) rows.push(...expressionRows(face.expression));
   $("result").innerHTML = `<tbody>${rows.join("")}</tbody>`;
   const q = face.quality;
   $("quality").textContent = `기울기 ${q.roll ?? "-"}°, 좌우 돌림 ${q.yaw ?? "-"}, 얼굴 폭 ${q.faceWidth ?? "-"} · ${face.elapsed_ms}ms`;
@@ -423,6 +580,7 @@ async function startCamera(deviceId) {
   await listCameras(track.getSettings().deviceId);  // 권한을 받은 뒤라 장치 이름이 보인다
   $("backend").textContent += ` · 카메라: ${track.label} (${v.videoWidth}×${v.videoHeight})`;
   $("start").textContent = "카메라 켜짐"; $("start").disabled = true;
+  $("expr").disabled = false;
   if (!streaming) { streaming = true; loop(); }
 }
 
@@ -437,6 +595,7 @@ function loop() {
   if (o.width !== v.videoWidth) { o.width = v.videoWidth; o.height = v.videoHeight; }
   const ts = Math.max(now, lastTs + 1); lastTs = ts;
   live = landmarker.detectForVideo(v, ts);
+  collectExpression(live, v.videoWidth);
   const qa = quality(live, v.videoWidth, v.videoHeight);
   const ctx = o.getContext("2d"); ctx.clearRect(0, 0, o.width, o.height);
   if (live.faceLandmarks) for (const lm of live.faceLandmarks) {
@@ -488,10 +647,25 @@ function analyzeImage(url) {
   });
 }
 window.__analyzeImage = analyzeImage;  // 자동 검증용
+// 자동 검증용: 사진 한 장으로 표정 계산 경로 확인
+window.__exprSelfTest = async (url, n = 20) => {
+  const img = new Image(); img.crossOrigin = "anonymous";
+  await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = url; });
+  const c = new OffscreenCanvas(img.naturalWidth, img.naturalHeight); c.getContext("2d").drawImage(img, 0, 0);
+  exprSamples = [];
+  for (let i = 0; i < n; i++) {
+    const ts = Math.max(performance.now(), lastTs + 1); lastTs = ts;
+    collectExpression(landmarker.detectForVideo(c, ts), img.naturalWidth);
+    await new Promise((r) => setTimeout(r, 30));
+  }
+  const S = exprSamples; exprSamples = null;
+  return S.length ? summarizeExpression(S) : { error: "표본 없음" };
+};
 
 $("start").onclick = () => startCamera().catch((e) => { status(cameraError(e), "warn"); listCameras().catch(() => {}); });
 $("cams").onchange = (e) => startCamera(e.target.value).catch((err) => status(cameraError(err), "warn"));
 $("analyze").onclick = () => analyzeFrame();
+$("expr").onclick = () => measureExpression().catch((e) => status("표정·시선 측정 오류: " + e.message, "warn"));
 $("file").onchange = (e) => { const f = e.target.files[0]; if (f) analyzeImage(URL.createObjectURL(f)); };
 window.addEventListener("unhandledrejection", (e) => status("오류: " + (e.reason && e.reason.message || e.reason), "warn"));
 

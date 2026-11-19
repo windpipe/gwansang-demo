@@ -35,6 +35,23 @@
    "narrow",
    "wide"
   ],
+  "cheeks": [
+   "full",
+   "lean",
+   "prominent_cheekbones"
+  ],
+  "forehead_shape": [
+   "m_shape",
+   "round",
+   "square",
+   "straight",
+   "trapezoid"
+  ],
+  "chin_length": [
+   "long",
+   "medium",
+   "short"
+  ],
   "eyebrow_density": [
    "dark",
    "light"
